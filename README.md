@@ -1,140 +1,118 @@
 # TaskFlow
 
-Full-stack task management app. Express + MongoDB backend with JWT auth, role-based access control, and Swagger docs. React frontend with a clean dark-themed dashboard.
+A task management API with JWT auth and role-based permissions. Built with Express + MongoDB on the backend, React frontend for testing the API.
 
-## Quick Start
+## What it does
 
-### Prerequisites
+Users can register, log in, and manage their own tasks. Admins can see and manage everyone's tasks. Pretty standard CRUD app with proper auth.
 
-- Node.js 18+
-- MongoDB running locally (or use the Docker setup below)
+## Running it locally
 
-### 1. Clone and install
+You need Node.js and MongoDB installed (or use Docker for MongoDB).
 
 ```bash
-git clone <your-repo-url> taskflow
-cd taskflow
-
 # backend
 cd server
-cp ../.env.example .env   # tweak values if needed
 npm install
+cp ../.env.example .env
+# edit .env if you need different values
+npm run dev
 
-# frontend
-cd ../client
+# frontend (separate terminal)
+cd client
 npm install
+npm run dev
 ```
 
-### 2. Run with Docker (optional)
+Backend runs on `localhost:5000`, frontend on `localhost:5173`.
 
-If you don't have MongoDB installed locally, spin it up with Docker:
-
+If you don't have MongoDB locally, just run:
 ```bash
 docker compose up mongo -d
 ```
 
-Or run the full stack (backend + MongoDB):
+## API endpoints
 
+**Auth:**
+- `POST /api/auth/register` - create account
+- `POST /api/auth/login` - get JWT token
+- `GET /api/auth/me` - current user info (needs token)
+
+**Tasks:**
+- `GET /api/tasks` - list your tasks (or all if admin)
+- `POST /api/tasks` - create task
+- `GET /api/tasks/:id` - get one task
+- `PUT /api/tasks/:id` - update task
+- `DELETE /api/tasks/:id` - delete task
+
+All task routes need a valid JWT in the `Authorization: Bearer <token>` header.
+
+Check out the full API docs at `http://localhost:5000/api-docs` when the server is running.
+
+## Tech stack
+
+**Backend:** Node, Express, MongoDB (Mongoose), bcrypt, JWT, Zod validation, Swagger docs
+
+**Frontend:** React, Vite, TailwindCSS, Axios, react-router, react-hot-toast
+
+**Security:** Helmet, CORS, rate limiting
+
+## Project structure
+
+```
+server/
+  src/
+    config/          # db connection, env vars, swagger
+    controllers/     # route handlers
+    middleware/      # auth, validation, errors
+    models/          # mongoose schemas
+    routes/          # API routes
+    validators/      # zod schemas
+    app.js
+    server.js
+
+client/
+  src/
+    api/             # axios setup
+    components/      # navbar, modals, etc
+    context/         # auth state
+    pages/           # login, register, dashboard
+```
+
+## How it scales
+
+Right now it's a monolith, but it's structured to split into microservices later if needed. Auth and tasks are already separate modules with their own controllers/routes/validation.
+
+**Caching:** Add Redis for response caching and rate limiter state sharing across instances. Cache GET /tasks with a short TTL, invalidate on writes.
+
+**Load balancing:** The API is stateless (JWT = no server sessions), so you can throw it behind nginx or AWS ALB and scale horizontally. Just run multiple instances.
+
+**Database:** Use MongoDB replica sets for HA. Index on `assignedUser` and `status` fields for faster queries.
+
+## Environment variables
+
+Copy `.env.example` to `server/.env` and fill in:
+
+- `PORT` - server port (default 5000)
+- `MONGO_URI` - MongoDB connection string
+- `JWT_SECRET` - secret for signing tokens (change this!)
+- `JWT_EXPIRES_IN` - token expiry (default 7d)
+- `CLIENT_URL` - frontend URL for CORS
+
+## Docker
+
+Full stack (MongoDB + backend):
 ```bash
 docker compose up --build
 ```
 
-### 3. Start the dev servers
-
-In two terminals:
-
+Just MongoDB:
 ```bash
-# terminal 1 - backend
-cd server
-npm run dev
-
-# terminal 2 - frontend
-cd client
-npm run dev
+docker compose up mongo -d
 ```
 
-Backend runs on `http://localhost:5000`, frontend on `http://localhost:5173`.
+## Notes
 
-API docs: `http://localhost:5000/api-docs`
+The frontend is just for demo purposes. It shows all the API features work — auth flow, protected routes, CRUD operations, role-based UI changes (admin badge, etc).
 
-## Environment Variables
-
-| Variable | Default | Description |
-|---|---|---|
-| `PORT` | 5000 | Server port |
-| `MONGO_URI` | mongodb://localhost:27017/taskflow | MongoDB connection string |
-| `JWT_SECRET` | (change this) | Secret for signing JWTs |
-| `JWT_EXPIRES_IN` | 7d | Token expiry |
-| `CLIENT_URL` | http://localhost:5173 | Allowed CORS origin |
-
-## API Endpoints
-
-| Method | Route | Auth | Description |
-|---|---|---|---|
-| POST | `/api/auth/register` | No | Create account |
-| POST | `/api/auth/login` | No | Get JWT token |
-| GET | `/api/auth/me` | Yes | Current user info |
-| GET | `/api/tasks` | Yes | List tasks (own or all for admins) |
-| GET | `/api/tasks/:id` | Yes | Get single task |
-| POST | `/api/tasks` | Yes | Create task |
-| PUT | `/api/tasks/:id` | Yes | Update task |
-| DELETE | `/api/tasks/:id` | Yes | Delete task |
-
-## Project Structure
-
-```
-taskflow/
-├── server/
-│   └── src/
-│       ├── config/          # db, env, swagger setup
-│       ├── controllers/     # request handlers
-│       ├── middleware/       # auth, rbac, validation, errors
-│       ├── models/          # mongoose schemas
-│       ├── routes/          # route definitions + swagger jsdoc
-│       ├── validators/      # zod schemas
-│       ├── app.js           # express app config
-│       └── server.js        # entry point
-├── client/
-│   └── src/
-│       ├── api/             # axios instance
-│       ├── components/      # navbar, modal, protected route
-│       ├── context/         # auth state
-│       └── pages/           # login, register, dashboard
-├── docker-compose.yml
-└── .env.example
-```
-
-## Scalability & Architecture
-
-This section covers how this architecture maps to a production environment at scale.
-
-### Service Decomposition
-
-The monolithic Express server is structured in a way that makes it straightforward to split into microservices later. The auth module and task module are already decoupled — they share a database but have separate controllers, routes, and validation schemas. In production, you'd break these into independent services behind an API gateway (e.g., Kong, AWS API Gateway, or Nginx), each with their own database to follow the database-per-service pattern.
-
-The JWT-based auth makes this transition easy since tokens are stateless — any service can validate them independently without hitting a central session store.
-
-### Caching Strategy
-
-For a read-heavy workload like task listings, you'd add Redis as a caching layer:
-
-- **Response caching**: Cache `GET /tasks` results per user with a short TTL (30-60s). Invalidate on write operations.
-- **Session/token caching**: Store JWT blacklist entries in Redis for logout support (since JWTs are otherwise stateless until expiry).
-- **Rate limiter backing**: The current in-memory rate limiter works for a single instance. In production, swap to `rate-limit-redis` so the counter is shared across all instances.
-
-### Load Balancing
-
-The backend is stateless by design (no server-side sessions, JWT for auth), so it scales horizontally without sticky sessions. A typical setup would be:
-
-- **Nginx or AWS ALB** as a reverse proxy / load balancer in front of multiple Express instances
-- **PM2 cluster mode** or **Kubernetes pods** for process management and autoscaling
-- **MongoDB replica set** for database high availability
-
-### Deployment Pipeline
-
-A production deployment pipeline would look like:
-
-1. CI runs linting + tests on PR
-2. Docker image built and pushed to a registry (ECR, GHCR)
-3. Blue-green or rolling deploy via Kubernetes or ECS
-4. Health check endpoint (`/api/health`) used for readiness probes
+JWT secret in `.env.example` is a placeholder. Generate a real one before deploying anywhere.
